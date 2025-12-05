@@ -1,6 +1,14 @@
+# Telegram Client
 pyrogram==2.0.106
-pytgcalls==2.1.0 
+
+# Voice Chat Streaming (The Golden Version)
+# Yeh version latest hai aur purane dependencies ka error nahi dega
+py-tgcalls==3.0.0.dev24
+
+# Video Downloading
 yt-dlp
-aiohttp
+
+# Server & Utils
 flask
 gunicorn
+aiohttp
