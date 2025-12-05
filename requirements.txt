@@ -1,14 +1,6 @@
-# Telegram API framework
-pyrogram
-pytgcalls
-
-# Video and Audio downloading/parsing
+pyrogram==2.0.106
+pytgcalls==2.1.2
 yt-dlp
-
-# Asynchronous operations (often required by pyrogram/pytgcalls)
 aiohttp
-
-# Web Server for Uptime/Health Check (Flask App)
 flask
-# Gunicorn is recommended for running Flask apps reliably in production environments like Render
 gunicorn
