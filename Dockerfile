@@ -1,23 +1,25 @@
+# Python 3.10 is most stable for these bots
 FROM python:3.10-slim
 
-# Install system dependencies (FFmpeg and Git)
-# This is where we are allowed to use 'apt' because it's inside Docker
+# 1. Install System Tools (FFmpeg + Git + Compilers)
+# Git is added to handle complex installs if needed
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     git \
-    libopus0 \
-    libopus-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Set the working directory
+# 2. Set Working Directory
 WORKDIR /app
 
-# Copy your files to the container
-COPY . /app
+# 3. Upgrade Pip (Important step to avoid dependency errors)
+RUN pip install --upgrade pip
 
-# Install Python requirements
+# 4. Copy Requirements & Install
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Command to start the bot
-# CHANGE 'main.py' to whatever your main bot file is named (e.g., bot.py, music.py)
+# 5. Copy Bot Code
+COPY . .
+
+# 6. Start Command (Confirm your file name is bot.py)
 CMD ["python", "bot.py"]
