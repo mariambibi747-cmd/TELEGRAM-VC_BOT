@@ -27,9 +27,9 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # Copy requirements
 COPY requirements.txt .
 
-# Upgrade pip and install requirements
+# Upgrade pip and install requirements (with --pre for dev versions)
 RUN python3 -m pip install --upgrade pip setuptools wheel && \
-    python3 -m pip install --no-cache-dir -r requirements.txt
+    python3 -m pip install --no-cache-dir --pre -r requirements.txt
 
 COPY . .
 
