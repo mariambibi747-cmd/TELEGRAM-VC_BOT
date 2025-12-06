@@ -4,11 +4,10 @@ import threading
 from flask import Flask
 from pyrogram import Client, filters
 from pyrogram.types import Message
-from pytgcalls import PyTgCalls
-# Yahan se `.types` hata diya gaya hai (Line 9)
-from pytgcalls.input_stream import AudioPiped, AudioVideoPiped, StreamType 
-# Yahan se `.types` hata diya gaya hai (Line 10)
-from pytgcalls.input_stream.quality import HighQualityAudio, MediumQualityVideo
+# FIX: StreamType ko top-level par, baki ko sahi path par rakha gaya.
+from pytgcalls import PyTgCalls, StreamType  
+from pytgcalls.types.input_stream import AudioPiped, AudioVideoPiped
+from pytgcalls.types.input_stream.quality import HighQualityAudio, MediumQualityVideo
 from yt_dlp import YoutubeDL
 from collections import deque
 import re
@@ -234,4 +233,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
