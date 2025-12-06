@@ -5,9 +5,10 @@ from flask import Flask
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from pytgcalls import PyTgCalls
-from pytgcalls.types import StreamType
-from pytgcalls.types.input_stream import AudioPiped, AudioVideoPiped
+# --- Yahan FIX kiya gaya hai: StreamType ko input_stream se import kiya gaya ---
+from pytgcalls.types.input_stream import AudioPiped, AudioVideoPiped, StreamType
 from pytgcalls.types.input_stream.quality import HighQualityAudio, MediumQualityVideo
+# -----------------------------------------------------------------------------
 from yt_dlp import YoutubeDL
 from collections import deque
 import re
@@ -136,6 +137,7 @@ async def play_next(chat_id):
     if video_mode:
         # --- SMOOTH STREAMING VIA FFMPEG PIPELINE ---
         ffmpeg_command = get_optimized_ffmpeg_cmd(file_path)
+        # Note: StreamType() ko use karne ke liye, import upar theek kiya gaya hai
         stream = AudioVideoPiped(
             ffmpeg_command,
             audio_parameters=HighQualityAudio(),
@@ -233,3 +235,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+        
