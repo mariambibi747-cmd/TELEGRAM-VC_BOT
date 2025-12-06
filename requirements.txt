@@ -1,7 +1,5 @@
 Pyrogram==2.0.106
-pytgcalls==3.0.0.dev24
-cryptg
-tgsocks
+py-tgcalls==3.0.0.dev24
 yt-dlp
 flask
 gunicorn
