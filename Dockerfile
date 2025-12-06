@@ -23,8 +23,8 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # Requirements copy karein
 COPY requirements.txt .
 
-# FINAL FIX: Pip upgrade aur package install ko ek hi command mein combine karein.
-RUN pip install --upgrade pip && pip3 install --no-cache-dir --pre -r requirements.txt
+# FINAL FIX: python3 -m pip use karein taki upgrade aur install guaranteed ho.
+RUN python3 -m pip install --upgrade pip && python3 -m pip install --no-cache-dir --pre -r requirements.txt
 
 COPY . .
 
