@@ -142,7 +142,7 @@ async def cmd_start(client, message: Message):
         "**💡 Examples:**\n"
         "`/play Shape of You`\n"
         "`/vplay https://youtu.be/example`\n\n"
-        "**Made with ❤️ | Powered by Pyrogram**"
+        "**Made with ❤️ | Powered by CRETIC BOT**"
     )
 
 @app.on_message(filters.command("help"))
