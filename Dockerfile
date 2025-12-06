@@ -1,12 +1,16 @@
-# Python 3.9 Image use karenge
-FROM python:3.9-slim-buster
-
-# System packages update aur FFmpeg install
-RUN apt-get update && apt-get upgrade -y
-RUN apt-get install -y ffmpeg git
+# Naya Base Image: Python 3.9 on Debian 12 (Bookworm) - Best Choice
+FROM python:3.9-slim-bookworm
 
 # Working directory set karein
 WORKDIR /app
+
+# System packages update aur FFmpeg install
+# Bookworm par repositories perfectly kaam karte hain.
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    git \
+    --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
 
 # Requirements copy aur install karein
 COPY requirements.txt .
