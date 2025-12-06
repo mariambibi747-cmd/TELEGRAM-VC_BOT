@@ -1,20 +1,23 @@
 import asyncio
 import os
 import threading
+from collections import deque
+import re
+
 from flask import Flask
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from pytgcalls import PyTgCalls
+from pytgcalls.types import Update
 from pytgcalls.types.input_stream import AudioPiped, AudioVideoPiped
 from pytgcalls.types.input_stream.quality import HighQualityAudio, MediumQualityVideo
 from yt_dlp import YoutubeDL
-from collections import deque
-import re
 
 # =================== CONFIGURATION ===================
-API_ID = int(os.getenv("API_ID", "YOUR_API_ID"))
-API_HASH = os.getenv("API_HASH", "YOUR_API_HASH")
-BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")
+# Render Environment Variables se ye value uthayega
+API_ID = int(os.getenv("API_ID", "12345"))
+API_HASH = os.getenv("API_HASH", "your_hash_here")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "your_token_here")
 
 app = Client("vc_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 pytgcalls = PyTgCalls(app)
@@ -22,23 +25,25 @@ pytgcalls = PyTgCalls(app)
 queues = {}
 current_playing = {}
 
-# Flask server for uptime
+# Flask server for uptime (Render Port handling)
 flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def home():
-    return "Bot is online!"
+    return "Bot is online and running!"
 
 def run_webserver():
+    # Render PORT variable ko respect karega
     port = int(os.environ.get("PORT", 10000))
     flask_app.run(host="0.0.0.0", port=port)
 
-# =================== YOUTUBE DOWNLOAD & CONFIG ===================
+# =================== YOUTUBE DOWNLOAD CONFIG ===================
 ydl_audio_opts = {
     'format': 'bestaudio/best',
     'outtmpl': 'downloads/%(id)s.%(ext)s',
     'quiet': True,
     'no_warnings': True,
+    'postprocessors': [{'key': 'FFmpegExtractAudio','preferredcodec': 'mp3'}],
 }
 
 ydl_video_opts = {
@@ -60,32 +65,40 @@ async def search_youtube(query):
         'format': 'bestaudio',
         'noplaylist': True,
         'quiet': True,
-        'extract_flat': False,
-        'default_search': 'ytsearch1:',
+        'extract_flat': True, # Faster search
     }
     try:
         with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f"ytsearch1:{query}", download=False)
-            if 'entries' in info:
+            if 'entries' in info and info['entries']:
                 video = info['entries'][0]
-                return video['webpage_url'], video['title']
-    except:
-        pass
+                return video['url'], video['title']
+    except Exception as e:
+        print(f"Search Error: {e}")
     return None, None
 
 async def download_media(url, video=False):
     opts = ydl_video_opts if video else ydl_audio_opts
     try:
-        with YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            title = info.get('title', 'Unknown')
-            return filename, title
+        loop = asyncio.get_event_loop()
+        # Run downloading in a separate thread to avoid blocking
+        filename, title = await loop.run_in_executor(None, _download_worker, url, opts)
+        return filename, title
     except Exception as e:
         print(f"Download error: {e}")
         return None, None
 
-# =================== PLAY LOGIC ===================
+def _download_worker(url, opts):
+    with YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        filename = ydl.prepare_filename(info)
+        # Audio extraction might change ext, ensuring we return correct path
+        if not os.path.exists(filename):
+            base, _ = os.path.splitext(filename)
+            filename = base + ".mp3"
+        return filename, info.get('title', 'Unknown')
+
+# =================== PLAY LOGIC (UPDATED FOR V3) ===================
 async def play_next(chat_id):
     if chat_id not in queues or not queues[chat_id]:
         current_playing[chat_id] = None
@@ -101,207 +114,119 @@ async def play_next(chat_id):
     
     try:
         if video_mode:
-            # Video stream
             stream = AudioVideoPiped(
                 file_path,
                 audio_parameters=HighQualityAudio(),
                 video_parameters=MediumQualityVideo()
             )
         else:
-            # Audio stream
             stream = AudioPiped(
                 file_path,
                 audio_parameters=HighQualityAudio()
             )
         
-        await pytgcalls.play(chat_id, stream)
+        # V3 Syntax: join_group_call works for both joining and switching
+        await pytgcalls.join_group_call(chat_id, stream)
+        
         current_playing[chat_id] = {'title': title, 'file': file_path}
         print(f"✅ Playing: {title}")
     except Exception as e:
         print(f"❌ Error playing: {e}")
+        # Cleanup if failed
         if os.path.exists(file_path):
             try:
                 os.remove(file_path)
-            except:
-                pass
+            except: pass
         await play_next(chat_id)
 
-# =================== TELEGRAM COMMANDS ===================
+# =================== COMMANDS ===================
 @app.on_message(filters.command("start"))
 async def cmd_start(client, message: Message):
-    await message.reply_text(
-        f"👋 **Hello {message.from_user.mention}!**\n\n"
-        "🎵 **I'm a Music & Video Player Bot!**\n\n"
-        "**📋 Available Commands:**\n"
-        "▶️ `/play` <song name/URL> - Play audio\n"
-        "🎥 `/vplay` <video name/URL> - Play video\n"
-        "⏭️ `/skip` - Skip current song\n"
-        "⏹️ `/stop` - Stop playing & clear queue\n"
-        "📜 `/queue` - Show current queue\n"
-        "ℹ️ `/current` - Show current playing song\n\n"
-        "**💡 Examples:**\n"
-        "`/play Shape of You`\n"
-        "`/vplay https://youtu.be/example`\n\n"
-        "**Made with ❤️ | Powered by CRETIC BOT**"
-    )
+    await message.reply_text(f"👋 **Hello {message.from_user.mention}!**\nI am running on Render with Docker!")
 
-@app.on_message(filters.command("help"))
-async def cmd_help(client, message: Message):
-    await message.reply_text(
-        "**📚 Bot Commands Help:**\n\n"
-        "**Music Commands:**\n"
-        "• `/play <name/URL>` - Play audio in voice chat\n"
-        "• `/vplay <name/URL>` - Play video in voice chat\n"
-        "• `/skip` - Skip to next song\n"
-        "• `/stop` - Stop playback & clear queue\n\n"
-        "**Queue Commands:**\n"
-        "• `/queue` - View current queue\n"
-        "• `/current` - See what's playing now\n\n"
-        "**Other Commands:**\n"
-        "• `/start` - Start the bot\n"
-        "• `/help` - Show this message\n\n"
-        "**🔥 Pro Tips:**\n"
-        "✓ You can search by song name\n"
-        "✓ Or paste direct YouTube URL\n"
-        "✓ Bot auto-plays queue songs\n\n"
-        "**Need support? Contact admin!**"
-    )
-
-@app.on_message(filters.command("play"))
+@app.on_message(filters.command(["play", "vplay"]))
 async def cmd_play(client, message: Message):
     chat_id = message.chat.id
+    is_video = "vplay" in message.command[0]
+    
     if len(message.command) < 2:
-        await message.reply_text("❌ **Usage:** `/play <song name or URL>`\n\n**Example:** `/play Shape of You`")
+        await message.reply_text("❌ Usage: `/play Song Name`")
         return
     
     query = message.text.split(None, 1)[1]
-    url = extract_url(query)
+    msg = await message.reply_text("🔍 **Processing...**")
     
-    msg = await message.reply_text("🔍 **Searching...**")
+    url = extract_url(query)
+    title = query
     
     if not url:
         url, title = await search_youtube(query)
         if not url:
-            await msg.edit("❌ **No results found!**")
+            await msg.edit("❌ **Song not found.**")
             return
-    else:
-        title = query
-    
-    if chat_id not in queues:
-        queues[chat_id] = deque()
-    
-    queues[chat_id].append((url, False))
-    
-    if current_playing.get(chat_id) is None:
-        await msg.edit(f"▶️ **Now Playing:**\n{title}")
-        await play_next(chat_id)
-    else:
-        await msg.edit(f"➕ **Added to queue:**\n{title}")
 
-@app.on_message(filters.command("vplay"))
-async def cmd_vplay(client, message: Message):
-    chat_id = message.chat.id
-    if len(message.command) < 2:
-        await message.reply_text("❌ **Usage:** `/vplay <video name or URL>`\n\n**Example:** `/vplay Despacito`")
-        return
-    
-    query = message.text.split(None, 1)[1]
-    url = extract_url(query)
-    
-    msg = await message.reply_text("🔍 **Searching video...**")
-    
-    if not url:
-        url, title = await search_youtube(query)
-        if not url:
-            await msg.edit("❌ **No results found!**")
-            return
-    else:
-        title = query
-    
     if chat_id not in queues:
         queues[chat_id] = deque()
     
-    queues[chat_id].append((url, True))
+    queues[chat_id].append((url, is_video))
     
     if current_playing.get(chat_id) is None:
-        await msg.edit(f"🎥 **Now Playing Video:**\n{title}")
+        await msg.edit(f"▶️ **Playing:** {title}")
         await play_next(chat_id)
     else:
-        await msg.edit(f"➕ **Added to queue:**\n{title}")
+        await msg.edit(f"➕ **Queued:** {title}")
+
+@app.on_message(filters.command(["stop", "leave"]))
+async def cmd_stop(client, message: Message):
+    chat_id = message.chat.id
+    try:
+        await pytgcalls.leave_group_call(chat_id)
+        current_playing[chat_id] = None
+        queues[chat_id] = deque() # Clear queue
+        await message.reply_text("⏹️ **Disconnected.**")
+    except Exception as e:
+        await message.reply_text("❌ Not connected.")
 
 @app.on_message(filters.command("skip"))
 async def cmd_skip(client, message: Message):
     chat_id = message.chat.id
     if current_playing.get(chat_id):
-        try:
-            await pytgcalls.leave_call(chat_id)
-        except Exception as e:
-            print(f"Skip error: {e}")
-        await message.reply_text("⏭️ **Skipped!**")
+        # Current file delete karein
+        file_path = current_playing[chat_id].get('file')
+        if file_path and os.path.exists(file_path):
+            os.remove(file_path)
+        
+        await message.reply_text("⏭️ **Skipped.**")
         await play_next(chat_id)
     else:
-        await message.reply_text("❌ **Nothing is playing!**")
+        await message.reply_text("❌ Nothing playing.")
 
-@app.on_message(filters.command("stop"))
-async def cmd_stop(client, message: Message):
-    chat_id = message.chat.id
-    if current_playing.get(chat_id):
-        try:
-            await pytgcalls.leave_call(chat_id)
-        except Exception as e:
-            print(f"Stop error: {e}")
-        if chat_id in queues:
-            queues[chat_id] = deque()
-        current_playing[chat_id] = None
-        await message.reply_text("⏹️ **Stopped and cleared queue!**")
-    else:
-        await message.reply_text("❌ **Nothing is playing!**")
-
-@app.on_message(filters.command("queue"))
-async def cmd_queue(client, message: Message):
-    chat_id = message.chat.id
-    if chat_id not in queues or not queues[chat_id]:
-        await message.reply_text("📜 **Queue is empty!**")
-        return
-    
-    queue_text = "**📜 Current Queue:**\n\n"
-    for i, (url, is_video) in enumerate(queues[chat_id], 1):
-        mode = "🎥 Video" if is_video else "🎵 Audio"
-        queue_text += f"{i}. {mode}\n"
-    
-    await message.reply_text(queue_text)
-
-@app.on_message(filters.command("current"))
-async def cmd_current(client, message: Message):
-    chat_id = message.chat.id
-    if current_playing.get(chat_id):
-        title = current_playing[chat_id].get('title', 'Unknown')
-        await message.reply_text(f"🎵 **Now Playing:**\n{title}")
-    else:
-        await message.reply_text("❌ **Nothing is playing right now!**")
-
-# =================== STREAM END HANDLER ===================
+# =================== HANDLERS ===================
 @pytgcalls.on_stream_end()
-async def on_stream_end(client, update):
+async def on_stream_end(client, update: Update):
     chat_id = update.chat_id
-    if current_playing.get(chat_id) and current_playing[chat_id].get('file'):
-        try:
-            os.remove(current_playing[chat_id]['file'])
-            print(f"🗑️ Deleted: {current_playing[chat_id]['file']}")
-        except Exception as e:
-            print(f"Delete error: {e}")
+    if current_playing.get(chat_id):
+        file_path = current_playing[chat_id].get('file')
+        if file_path and os.path.exists(file_path):
+            os.remove(file_path)
+    
     await play_next(chat_id)
 
-# =================== MAIN ===================
 async def main():
-    os.makedirs("downloads", exist_ok=True)
+    if not os.path.exists("downloads"):
+        os.makedirs("downloads")
+    
+    # Webserver thread
     threading.Thread(target=run_webserver, daemon=True).start()
-    print("🚀 Starting PyTgCalls...")
+    
+    print("🚀 Starting Bot...")
     await pytgcalls.start()
-    print("🚀 Starting Pyrogram...")
     await app.start()
-    print("✅ Bot is running!")
-    await asyncio.Event().wait()
+    print("✅ Bot Deployed Successfully!")
+    
+    # Keep running
+    await pytgcalls.idle() # idle() is better for v3
 
 if __name__ == "__main__":
     asyncio.run(main())
+                              
