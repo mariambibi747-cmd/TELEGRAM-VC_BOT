@@ -1,25 +1,19 @@
-# Python 3.10 is most stable for these bots
-FROM python:3.10-slim
+# Python 3.9 Image use karenge
+FROM python:3.9-slim-buster
 
-# 1. Install System Tools (FFmpeg + Git + Compilers)
-# Git is added to handle complex installs if needed
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+# System packages update aur FFmpeg install
+RUN apt-get update && apt-get upgrade -y
+RUN apt-get install -y ffmpeg git
 
-# 2. Set Working Directory
+# Working directory set karein
 WORKDIR /app
 
-# 3. Upgrade Pip (Important step to avoid dependency errors)
-RUN pip install --upgrade pip
-
-# 4. Copy Requirements & Install
+# Requirements copy aur install karein
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
-# 5. Copy Bot Code
+# Baaki code copy karein
 COPY . .
 
-# 6. Start Command (Confirm your file name is bot.py)
-CMD ["python", "bot.py"]
+# Start command
+CMD ["python3", "bot.py"]
