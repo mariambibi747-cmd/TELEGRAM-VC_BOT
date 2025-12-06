@@ -2,29 +2,30 @@ FROM python:3.9-slim-bookworm
 
 WORKDIR /app
 
-# System dependencies for FFmpeg and build tools
-RUN apt-get update && \
+# Final Clean Install: Only essential packages
+RUN rm -rf /var/lib/apt/lists/* && \
+    apt-get update && \
     apt-get install -y \
+    curl \
+    gnupg \
     ffmpeg \
     git \
     build-essential \
     python3-dev \
     libffi-dev \
-    libssl-dev \
-    --no-install-recommends && \
-    rm -rf /var/lib/apt/lists/*
+    libz-dev \
+    --no-install-recommends
 
-# Copy requirements
+# Rust toolchain
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Requirements copy karein
 COPY requirements.txt .
 
-# Upgrade pip and install requirements (--pre for py-tgcalls dev version)
-RUN python3 -m pip install --upgrade pip setuptools wheel && \
-    python3 -m pip install --no-cache-dir --pre -r requirements.txt
+# Guaranteed Install (Final Fix for Pip Path)
+RUN python3 -m pip install --upgrade pip && python3 -m pip install --no-cache-dir --pre -r requirements.txt
 
-# Copy bot code
 COPY . .
-
-# Render will provide PORT env variable
-EXPOSE 10000
 
 CMD ["python3", "bot.py"]
