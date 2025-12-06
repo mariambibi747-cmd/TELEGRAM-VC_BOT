@@ -5,8 +5,8 @@ from flask import Flask
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from pytgcalls import PyTgCalls
-from pytgcalls.types import AudioPiped, AudioVideoPiped
-from pytgcalls.types.stream import Stream, StreamAudioEnded
+from pytgcalls.types.input_stream import AudioPiped, AudioVideoPiped
+from pytgcalls.types.input_stream.quality import HighQualityAudio, MediumQualityVideo
 from yt_dlp import YoutubeDL
 from collections import deque
 import re
@@ -42,7 +42,7 @@ ydl_audio_opts = {
 }
 
 ydl_video_opts = {
-    'format': 'best[height<=720]+bestaudio/best[ext=mp4]', 
+    'format': 'best[height<=480]', 
     'outtmpl': 'downloads/%(id)s.%(ext)s',
     'quiet': True,
     'no_warnings': True,
@@ -81,7 +81,8 @@ async def download_media(url, video=False):
             filename = ydl.prepare_filename(info)
             title = info.get('title', 'Unknown')
             return filename, title
-    except:
+    except Exception as e:
+        print(f"Download error: {e}")
         return None, None
 
 # =================== PLAY LOGIC ===================
@@ -100,26 +101,29 @@ async def play_next(chat_id):
     
     try:
         if video_mode:
-            # Video stream with optimization
+            # Video stream
             stream = AudioVideoPiped(
                 file_path,
-                video_parameters={
-                    'width': 854,
-                    'height': 480,
-                    'frame_rate': 24
-                }
+                audio_parameters=HighQualityAudio(),
+                video_parameters=MediumQualityVideo()
             )
         else:
-            # Simple audio stream
-            stream = AudioPiped(file_path)
+            # Audio stream
+            stream = AudioPiped(
+                file_path,
+                audio_parameters=HighQualityAudio()
+            )
         
-        await pytgcalls.play(
-            chat_id,
-            stream
-        )
+        await pytgcalls.play(chat_id, stream)
         current_playing[chat_id] = {'title': title, 'file': file_path}
+        print(f"✅ Playing: {title}")
     except Exception as e:
-        print(f"Error playing: {e}")
+        print(f"❌ Error playing: {e}")
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except:
+                pass
         await play_next(chat_id)
 
 # =================== TELEGRAM COMMANDS ===================
@@ -229,7 +233,10 @@ async def cmd_vplay(client, message: Message):
 async def cmd_skip(client, message: Message):
     chat_id = message.chat.id
     if current_playing.get(chat_id):
-        await pytgcalls.leave_call(chat_id)
+        try:
+            await pytgcalls.leave_call(chat_id)
+        except Exception as e:
+            print(f"Skip error: {e}")
         await message.reply_text("⏭️ **Skipped!**")
         await play_next(chat_id)
     else:
@@ -239,7 +246,10 @@ async def cmd_skip(client, message: Message):
 async def cmd_stop(client, message: Message):
     chat_id = message.chat.id
     if current_playing.get(chat_id):
-        await pytgcalls.leave_call(chat_id)
+        try:
+            await pytgcalls.leave_call(chat_id)
+        except Exception as e:
+            print(f"Stop error: {e}")
         if chat_id in queues:
             queues[chat_id] = deque()
         current_playing[chat_id] = None
@@ -277,15 +287,18 @@ async def on_stream_end(client, update):
     if current_playing.get(chat_id) and current_playing[chat_id].get('file'):
         try:
             os.remove(current_playing[chat_id]['file'])
-        except:
-            pass
+            print(f"🗑️ Deleted: {current_playing[chat_id]['file']}")
+        except Exception as e:
+            print(f"Delete error: {e}")
     await play_next(chat_id)
 
 # =================== MAIN ===================
 async def main():
     os.makedirs("downloads", exist_ok=True)
     threading.Thread(target=run_webserver, daemon=True).start()
+    print("🚀 Starting PyTgCalls...")
     await pytgcalls.start()
+    print("🚀 Starting Pyrogram...")
     await app.start()
     print("✅ Bot is running!")
     await asyncio.Event().wait()
