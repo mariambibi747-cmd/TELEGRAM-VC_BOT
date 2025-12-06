@@ -7,6 +7,9 @@ RUN rm -rf /var/lib/apt/lists/* && \
     apt-get install -y \
     ffmpeg \
     git \
+    build-essential \
+    python3-dev \
+    libffi-dev \
     --no-install-recommends
 
 COPY requirements.txt .
