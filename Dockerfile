@@ -2,9 +2,8 @@ FROM python:3.9-slim-bookworm
 
 WORKDIR /app
 
-# System dependencies (Compilers, FFmpeg, Rust)
-RUN rm -rf /var/lib/apt/lists/* && \
-    apt-get update && \
+# System dependencies
+RUN apt-get update && \
     apt-get install -y \
     curl \
     gnupg \
@@ -13,18 +12,24 @@ RUN rm -rf /var/lib/apt/lists/* && \
     build-essential \
     python3-dev \
     libffi-dev \
+    libssl-dev \
     libz-dev \
-    --no-install-recommends
+    libjpeg-dev \
+    zlib1g-dev \
+    libwebp-dev \
+    --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
 
-# Rust toolchain
+# Rust toolchain (required for cryptg)
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Requirements copy karein
+# Copy requirements
 COPY requirements.txt .
 
-# FINAL FIX: python3 -m pip use karein taki upgrade aur install guaranteed ho.
-RUN python3 -m pip install --upgrade pip && python3 -m pip install --no-cache-dir --pre -r requirements.txt
+# Upgrade pip and install requirements
+RUN python3 -m pip install --upgrade pip setuptools wheel && \
+    python3 -m pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
